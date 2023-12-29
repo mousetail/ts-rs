@@ -245,7 +245,9 @@ mod export;
 /// - `#[ts(skip)]`:  
 ///   Skip this variant  
 pub trait TS {
-    const EXPORT_TO: Option<&'static str> = None;
+    fn get_export_path() -> Option<String> {
+        None
+    }
 
     /// Declaration of this type, e.g. `interface User { user_id: number, ... }`.
     /// This function will panic if the type has no declaration.
@@ -257,8 +259,8 @@ pub trait TS {
     fn name() -> String;
 
     /// Name of this type in TypeScript, with type arguments.
-    fn name_with_type_args(args: Vec<String>) -> String {
-        format!("{}<{}>", Self::name(), args.join(", "))
+    fn name_with_type_args(_args: Vec<String>) -> String {
+        format!("{}", Self::name())
     }
 
     /// Formats this types definition in TypeScript, e.g `{ user_id: number }`.
@@ -282,6 +284,13 @@ pub trait TS {
     /// `true` if this is a transparent type, e.g tuples or a list.  
     /// This is used for resolving imports when using the `export!` macro.
     fn transparent() -> bool;
+
+    fn export_recursive() -> Result<(), ExportError>
+    where Self: 'static {
+        Self::export_recursive_but_exclude(&mut HashSet::new())
+    }
+    fn export_recursive_but_exclude(exclude: &mut HashSet<TypeId>)
+     -> Result<(), ExportError> where Self: 'static;
 
     /// Manually export this type to a file.
     /// The output file can be specified by annotating the type with `#[ts(export_to = ".."]`.
@@ -326,18 +335,18 @@ pub struct Dependency {
     pub ts_name: String,
     /// Path to where the type would be exported. By default a filename is derived from the types
     /// name, which can be customized with `#[ts(export_to = "..")]`.
-    pub exported_to: &'static str,
+    pub exported_to: String,
 }
 
 impl Dependency {
     /// Constructs a [`Dependency`] from the given type `T`.
-    /// If `T` is not exportable (meaning `T::EXPORT_TO` is `None`), this function will return
+    /// If `T` is not exportable (meaning `T::get_export_path()` is `None`), this function will return
     /// `None`
     pub fn from_ty<T: TS + 'static + ?Sized>() -> Option<Self> {
-        let exported_to = T::EXPORT_TO?;
+        let exported_to = <T as TS>::get_export_path()?;
         Some(Dependency {
             type_id: TypeId::of::<T>(),
-            ts_name: T::name(),
+            ts_name: <T as TS>::name(),
             exported_to,
         })
     }
@@ -351,6 +360,9 @@ macro_rules! impl_primitives {
             fn name_with_type_args(args: Vec<String>) -> String {
                 assert!(args.is_empty(), "called name_with_type_args on primitive");
                 $l.to_owned()
+            }
+            fn export_recursive_but_exclude(_exclude: &mut HashSet<TypeId>) -> Result<(), ExportError> {
+                Ok(())
             }
             fn inline() -> String { $l.to_owned() }
             fn dependencies() -> Vec<Dependency> { vec![] }
@@ -378,6 +390,16 @@ macro_rules! impl_tuples {
                 .collect()
             }
             fn transparent() -> bool { true }
+            fn export_recursive_but_exclude(exclude: &mut HashSet<std::any::TypeId>) -> Result<(), ExportError>
+            where Self: 'static {
+                if !exclude.contains(&std::any::TypeId::of::<Self>()) {
+                    exclude.insert(std::any::TypeId::of::<Self>());
+                    {
+                        $($i::export_recursive_but_exclude(exclude)?) ;*
+                    };
+                };
+                Ok(())
+            }
         }
     };
     ( $i2:ident $(, $i:ident)* ) => {
@@ -405,6 +427,10 @@ macro_rules! impl_wrapper {
                 T::dependencies()
             }
             fn transparent() -> bool { T::transparent() }
+            fn export_recursive_but_exclude(exclude: &mut HashSet<std::any::TypeId>) -> Result<(), ExportError>
+            where Self: 'static {
+                <T>::export_recursive_but_exclude(exclude)
+            }
         }
     };
 }
@@ -424,6 +450,10 @@ macro_rules! impl_shadow {
                 <$s>::dependencies()
             }
             fn transparent() -> bool { <$s>::transparent() }
+            fn export_recursive_but_exclude(exclude: &mut HashSet<std::any::TypeId>) -> Result<(), ExportError>
+            where Self: 'static {
+                <$s>::export_recursive_but_exclude(exclude)
+            }
         }
     };
 }
@@ -457,6 +487,19 @@ impl<T: TS> TS for Option<T> {
     fn transparent() -> bool {
         true
     }
+
+    fn export_recursive_but_exclude(exclude: &mut HashSet<std::any::TypeId>) -> Result<(), ExportError>
+    where
+        Self: 'static,
+    {
+        if !exclude.contains(&std::any::TypeId::of::<Self>()) {
+            <Self>::export()?;
+            exclude.insert(std::any::TypeId::of::<Self>());
+
+            T::export_recursive_but_exclude(exclude)?;
+        };
+        Ok(())
+    }
 }
 
 impl<T: TS> TS for Vec<T> {
@@ -487,6 +530,16 @@ impl<T: TS> TS for Vec<T> {
 
     fn transparent() -> bool {
         true
+    }
+
+    fn export_recursive_but_exclude(exclude: &mut HashSet<std::any::TypeId>) -> Result<(), ExportError>
+    where Self: 'static {
+        if !exclude.contains(&std::any::TypeId::of::<Self>()) {
+            exclude.insert(std::any::TypeId::of::<Self>());
+
+            T::export_recursive_but_exclude(exclude)?;
+        };
+        Ok(())
     }
 }
 
@@ -522,6 +575,18 @@ impl<K: TS, V: TS> TS for HashMap<K, V> {
     fn transparent() -> bool {
         true
     }
+
+    fn export_recursive_but_exclude(exclude: &mut HashSet<TypeId>) -> Result<(), ExportError>
+    where Self: 'static {
+        if !exclude.contains(&TypeId::of::<Self>()) {
+            Self::export()?;
+            exclude.insert(TypeId::of::<Self>());
+
+            K::export_recursive_but_exclude(exclude)?;
+            V::export_recursive_but_exclude(exclude)?;
+        };
+        Ok(())
+    }
 }
 
 impl<I: TS> TS for Range<I> {
@@ -549,6 +614,17 @@ impl<I: TS> TS for Range<I> {
     fn transparent() -> bool {
         true
     }
+
+    fn export_recursive_but_exclude(exclude: &mut HashSet<TypeId>) -> Result<(), ExportError>
+    where Self: 'static {
+        if !exclude.contains(&TypeId::of::<Self>()) {
+            Self::export()?;
+            exclude.insert(TypeId::of::<Self>());
+
+            I::export_recursive_but_exclude(exclude)?;
+        };
+        Ok(())
+    }
 }
 
 impl<I: TS> TS for RangeInclusive<I> {
@@ -575,6 +651,17 @@ impl<I: TS> TS for RangeInclusive<I> {
 
     fn transparent() -> bool {
         true
+    }
+
+    fn export_recursive_but_exclude(exclude: &mut HashSet<TypeId>) -> Result<(), ExportError>
+    where Self: 'static {
+        if !exclude.contains(&TypeId::of::<Self>()) {
+            Self::export()?;
+            exclude.insert(TypeId::of::<Self>());
+
+            I::export_recursive_but_exclude(exclude)?;
+        };
+        Ok(())
     }
 }
 

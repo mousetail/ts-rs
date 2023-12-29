@@ -47,13 +47,28 @@ impl DerivedTS {
     }
 
     fn into_impl(self, rust_ty: Ident, generics: Generics) -> TokenStream {
+        let params = generics.params.iter().flat_map(
+            |k|match k {
+                GenericParam::Type(TypeParam {
+                    ident,
+                    ..
+                }) => Some(ident),
+                GenericParam::Lifetime(LifetimeParam {
+                    ..
+                }) => None,
+                GenericParam::Const(ConstParam {
+                    ..
+                }) => None,
+            }
+        ).collect::<Vec<_>>();
+
         let export_to = match &self.export_to {
             Some(dirname) if dirname.ends_with('/') => {
-                format!("{}{}.ts", dirname, self.name)
+                format!("{}{}", dirname, self.name)
             }
             Some(filename) => filename.clone(),
             None => {
-                format!("bindings/{}.ts", self.name)
+                format!("bindings/{}", self.name)
             }
         };
 
@@ -80,16 +95,26 @@ impl DerivedTS {
             })
             .unwrap_or_else(TokenStream::new);
 
+        let recursive_export = dependencies.iter().map(|t| quote! {
+            eprintln!("\t {}::{}", <Self as ts_rs::TS>::name(), <#t as ts_rs::TS>::name());
+            <#t as ts_rs::TS>::export_recursive_but_exclude(exclude)?;
+        }).collect::<TokenStream>();
+
+        let name_with_generics = format!("{}{}", name, params.iter().map(|_|"{}").collect::<String>());
+        let export_with_generics = format!("{}{}.ts", export_to, params.iter().map(|_|"{}").collect::<String>());
+
         let impl_start = generate_impl(&rust_ty, &generics);
         quote! {
             #impl_start {
-                const EXPORT_TO: Option<&'static str> = Some(#export_to);
+                fn get_export_path() -> Option<String> {
+                    Some(format!(#export_with_generics, #(<#params as ts_rs::TS>::name()),*))
+                }
 
                 fn decl() -> String {
                     #decl
                 }
                 fn name() -> String {
-                    #name.to_owned()
+                    format!(#name_with_generics, #(<#params as ts_rs::TS>::name()),*)
                 }
                 fn inline() -> String {
                     #inline
@@ -104,6 +129,18 @@ impl DerivedTS {
                 fn transparent() -> bool {
                     false
                 }
+
+                fn export_recursive_but_exclude(exclude: &mut std::collections::HashSet<std::any::TypeId>) -> Result<(), ts_rs::ExportError>
+                where Self: 'static {
+                    eprintln!("Exporting {}", Self::name());
+                    if !exclude.contains(&std::any::TypeId::of::<Self>()) {
+                        Self::export()?;
+                        exclude.insert(std::any::TypeId::of::<Self>());
+            
+                        #recursive_export;
+                    };
+                    Ok(())
+                }
             }
 
             #export
@@ -111,6 +148,11 @@ impl DerivedTS {
     }
 }
 
+// fn generate_recusive_export(ty: &Ident, depedencies: Dependencies) {
+//     quote!{
+        
+//     }
+// }
 // generate start of the `impl TS for #ty` block, up to (excluding) the open brace
 fn generate_impl(ty: &Ident, generics: &Generics) -> TokenStream {
     use GenericParam::*;
@@ -142,7 +184,10 @@ fn generate_impl(ty: &Ident, generics: &Generics) -> TokenStream {
     });
 
     let where_bound = add_ts_to_where_clause(generics);
-    quote!(impl <#(#bounds),*> ts_rs::TS for #ty <#(#type_args),*> #where_bound)
+    quote!(
+        #[automatically_derived]
+        impl <#(#bounds),*> ts_rs::TS for #ty <#(#type_args),*> #where_bound
+    )
 }
 
 fn add_ts_to_where_clause(generics: &Generics) -> Option<WhereClause> {
@@ -170,11 +215,18 @@ fn add_ts_to_where_clause(generics: &Generics) -> Option<WhereClause> {
 /// Please take a look at [TS](./trait.TS.html) for documentation.
 #[proc_macro_derive(TS, attributes(ts))]
 pub fn typescript(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    match entry(input) {
+    let stream: proc_macro::TokenStream = match entry(input) {
         Err(err) => err.to_compile_error(),
         Ok(result) => result,
     }
-    .into()
+    .into();
+
+    // use std::io::prelude::*;
+    // use std::fs::OpenOptions;
+    // let mut file = OpenOptions::new().append(true).write(true).open("token_stream.rs").unwrap();
+    // file.write_all(format!("{}", stream).as_bytes()).unwrap();
+
+    stream
 }
 
 fn entry(input: proc_macro::TokenStream) -> Result<TokenStream> {

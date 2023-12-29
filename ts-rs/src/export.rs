@@ -28,6 +28,7 @@ pub enum ExportError {
 
 /// Export `T` to the file specified by the `#[ts(export_to = ..)]` attribute
 pub(crate) fn export_type<T: TS + ?Sized + 'static>() -> Result<(), ExportError> {
+    eprintln!("Exporting type {}", T::name());
     let path = output_path::<T>()?;
     export_type_to::<T, _>(&path)
 }
@@ -72,7 +73,7 @@ pub(crate) fn export_type_to_string<T: TS + ?Sized + 'static>() -> Result<String
 fn output_path<T: TS + ?Sized>() -> Result<PathBuf, ExportError> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").map_err(|_| ManifestDirNotSet)?;
     let manifest_dir = Path::new(&manifest_dir);
-    let path = PathBuf::from(T::EXPORT_TO.ok_or(CannotBeExported)?);
+    let path = PathBuf::from(T::get_export_path().ok_or(CannotBeExported)?);
     Ok(manifest_dir.join(path))
 }
 
@@ -84,9 +85,11 @@ fn generate_decl<T: TS + ?Sized>(out: &mut String) {
 
 /// Push an import statement for all dependencies of `T`
 fn generate_imports<T: TS + ?Sized + 'static>(out: &mut String) -> Result<(), ExportError> {
-    let path = Path::new(T::EXPORT_TO.ok_or(ExportError::CannotBeExported)?);
+    let path_string = T::get_export_path().ok_or(ExportError::CannotBeExported)?;
+    let path = Path::new(&path_string);
 
     let deps = T::dependencies();
+    eprintln!("Deps {deps:?}");
     let deduplicated_deps = deps
         .iter()
         .filter(|dep| dep.type_id != TypeId::of::<T>())
@@ -94,7 +97,7 @@ fn generate_imports<T: TS + ?Sized + 'static>(out: &mut String) -> Result<(), Ex
         .collect::<BTreeMap<_, _>>();
 
     for (_, dep) in deduplicated_deps {
-        let rel_path = import_path(path, Path::new(dep.exported_to));
+        let rel_path = import_path(path, Path::new(&dep.exported_to));
         writeln!(
             out,
             "import type {{ {} }} from {:?};",

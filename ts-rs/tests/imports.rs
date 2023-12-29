@@ -28,7 +28,7 @@ pub enum TestEnum {
 fn test_def() {
     // The only way to get access to how the imports look is to export the type and load the exported file
     TestEnum::export().unwrap();
-    let text = std::fs::read_to_string(TestEnum::EXPORT_TO.unwrap()).unwrap();
+    let text = std::fs::read_to_string(&TestEnum::get_export_path().unwrap()).unwrap();
 
     // Checks to make sure imports are ordered and deduplicated
     assert_eq!(text,
@@ -43,5 +43,5 @@ fn test_def() {
         )
     );
 
-    std::fs::remove_file(TestEnum::EXPORT_TO.unwrap()).unwrap();
+    std::fs::remove_file(&TestEnum::get_export_path().unwrap()).unwrap();
 }

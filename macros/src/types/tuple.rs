@@ -39,7 +39,7 @@ pub(crate) fn tuple(
         decl: quote! {
             format!(
                 "type {}{} = {};",
-                #name,
+                Self::name(),
                 #generic_args,
                 Self::inline()
             )

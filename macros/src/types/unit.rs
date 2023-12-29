@@ -22,7 +22,7 @@ pub(crate) fn empty_array(attr: &StructAttr, name: &str) -> Result<DerivedTS> {
 
     Ok(DerivedTS {
         inline: quote!("never[]".to_owned()),
-        decl: quote!(format!("type {} = never[];", #name)),
+        decl: quote!(format!("type {} = never[];", Self::name())),
         inline_flattened: None,
         name: name.to_owned(),
         dependencies: Dependencies::default(),
@@ -36,7 +36,7 @@ pub(crate) fn null(attr: &StructAttr, name: &str) -> Result<DerivedTS> {
 
     Ok(DerivedTS {
         inline: quote!("null".to_owned()),
-        decl: quote!(format!("type {} = null;", #name)),
+        decl: quote!(format!("type {} = null;", Self::name())),
         inline_flattened: None,
         name: name.to_owned(),
         dependencies: Dependencies::default(),

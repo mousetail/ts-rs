@@ -12,30 +12,8 @@ use crate::{attr::StructAttr, deps::Dependencies};
 /// this expands to an expression which evaluates to a `String`.
 ///
 /// If a default type arg is encountered, it will be added to the dependencies.
-pub fn format_generics(deps: &mut Dependencies, generics: &Generics) -> TokenStream {
-    let mut expanded_params = generics
-        .params
-        .iter()
-        .filter_map(|param| match param {
-            GenericParam::Type(type_param) => Some({
-                let ty = type_param.ident.to_string();
-                if let Some(default) = &type_param.default {
-                    let default = format_type(default, deps, generics);
-                    quote!(format!("{} = {}", #ty, #default))
-                } else {
-                    quote!(#ty.to_owned())
-                }
-            }),
-            _ => None,
-        })
-        .peekable();
-
-    if expanded_params.peek().is_none() {
-        return quote!("");
-    }
-
-    let comma_separated = quote!([#(#expanded_params),*].join(", "));
-    quote!(format!("<{}>", #comma_separated))
+pub fn format_generics(_deps: &mut Dependencies, _generics: &Generics) -> TokenStream {
+    quote!("")
 }
 
 pub fn format_type(ty: &Type, dependencies: &mut Dependencies, generics: &Generics) -> TokenStream {

@@ -49,7 +49,7 @@ pub(crate) fn r#enum_def(s: &ItemEnum) -> syn::Result<DerivedTS> {
     let generic_args = format_generics(&mut dependencies, &s.generics);
     Ok(DerivedTS {
         inline: quote!([#(#formatted_variants),*].join(" | ")),
-        decl: quote!(format!("type {}{} = {};", #name, #generic_args, Self::inline())),
+        decl: quote!(format!("type {}{} = {};", Self::name(), #generic_args, Self::inline())),
         inline_flattened: None,
         dependencies,
         name,
@@ -169,7 +169,7 @@ fn empty_enum(name: impl Into<String>, enum_attr: EnumAttr) -> DerivedTS {
     let name = name.into();
     DerivedTS {
         inline: quote!("never".to_owned()),
-        decl: quote!(format!("type {} = never;", #name)),
+        decl: quote!(format!("type {} = never;", Self::name())),
         name,
         inline_flattened: None,
         dependencies: Dependencies::default(),

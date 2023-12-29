@@ -53,7 +53,7 @@ pub(crate) fn newtype(
 
     let generic_args = format_generics(&mut dependencies, generics);
     Ok(DerivedTS {
-        decl: quote!(format!("type {}{} = {};", #name, #generic_args, #inline_def)),
+        decl: quote!(format!("type {}{} = {};", Self::name(), #generic_args, #inline_def)),
         inline: inline_def,
         inline_flattened: None,
         name: name.to_owned(),
