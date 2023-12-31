@@ -47,20 +47,15 @@ impl DerivedTS {
     }
 
     fn into_impl(self, rust_ty: Ident, generics: Generics) -> TokenStream {
-        let params = generics.params.iter().flat_map(
-            |k|match k {
-                GenericParam::Type(TypeParam {
-                    ident,
-                    ..
-                }) => Some(ident),
-                GenericParam::Lifetime(LifetimeParam {
-                    ..
-                }) => None,
-                GenericParam::Const(ConstParam {
-                    ..
-                }) => None,
-            }
-        ).collect::<Vec<_>>();
+        let params = generics
+            .params
+            .iter()
+            .flat_map(|k| match k {
+                GenericParam::Type(TypeParam { ident, .. }) => Some(ident),
+                GenericParam::Lifetime(LifetimeParam { .. }) => None,
+                GenericParam::Const(ConstParam { .. }) => None,
+            })
+            .collect::<Vec<_>>();
 
         let export_to = match &self.export_to {
             Some(dirname) if dirname.ends_with('/') => {
@@ -95,13 +90,26 @@ impl DerivedTS {
             })
             .unwrap_or_else(TokenStream::new);
 
-        let recursive_export = dependencies.iter().map(|t| quote! {
-            eprintln!("\t {}::{}", <Self as ts_rs::TS>::name(), <#t as ts_rs::TS>::name());
-            <#t as ts_rs::TS>::export_recursive_but_exclude(exclude)?;
-        }).collect::<TokenStream>();
+        let recursive_export = dependencies
+            .iter()
+            .map(|t| {
+                quote! {
+                    eprintln!("\t {}::{}", <Self as ts_rs::TS>::name(), <#t as ts_rs::TS>::name());
+                    <#t as ts_rs::TS>::export_recursive_but_exclude(exclude)?;
+                }
+            })
+            .collect::<TokenStream>();
 
-        let name_with_generics = format!("{}{}", name, params.iter().map(|_|"{}").collect::<String>());
-        let export_with_generics = format!("{}{}.ts", export_to, params.iter().map(|_|"{}").collect::<String>());
+        let name_with_generics = format!(
+            "{}{}",
+            name,
+            params.iter().map(|_| "{}").collect::<String>()
+        );
+        let export_with_generics = format!(
+            "{}{}.ts",
+            export_to,
+            params.iter().map(|_| "{}").collect::<String>()
+        );
 
         let impl_start = generate_impl(&rust_ty, &generics);
         quote! {
@@ -136,7 +144,7 @@ impl DerivedTS {
                     if !exclude.contains(&std::any::TypeId::of::<Self>()) {
                         Self::export()?;
                         exclude.insert(std::any::TypeId::of::<Self>());
-            
+
                         #recursive_export;
                     };
                     Ok(())
@@ -150,7 +158,7 @@ impl DerivedTS {
 
 // fn generate_recusive_export(ty: &Ident, depedencies: Dependencies) {
 //     quote!{
-        
+
 //     }
 // }
 // generate start of the `impl TS for #ty` block, up to (excluding) the open brace

@@ -71,7 +71,9 @@ pub(crate) fn export_type_to_string<T: TS + ?Sized + 'static>() -> Result<String
 
 /// Compute the output path to where `T` should be exported.
 fn output_path<T: TS + ?Sized>() -> Result<PathBuf, ExportError> {
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").map_err(|_| ManifestDirNotSet)?;
+    let manifest_dir = std::env::var("TS_RS_OUTPUT_DIR")
+        .or(std::env::var("CARGO_MANIFEST_DIR"))
+        .map_err(|_| ManifestDirNotSet)?;
     let manifest_dir = Path::new(&manifest_dir);
     let path = PathBuf::from(T::get_export_path().ok_or(CannotBeExported)?);
     Ok(manifest_dir.join(path))

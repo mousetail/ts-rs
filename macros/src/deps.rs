@@ -8,8 +8,7 @@ pub struct Dependencies(Vec<TokenStream>);
 impl Dependencies {
     /// Adds all dependencies from the given type
     pub fn append_from(&mut self, ty: &Type) {
-        self.0
-            .push(quote!(#ty));
+        self.0.push(quote!(#ty));
     }
 
     /// Adds the given type if it's *not* transparent.
@@ -30,7 +29,7 @@ impl Dependencies {
         self.0.extend(other.0)
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, proc_macro2::TokenStream>{
+    pub fn iter(&self) -> std::slice::Iter<'_, proc_macro2::TokenStream> {
         self.0.iter()
     }
 }

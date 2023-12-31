@@ -104,7 +104,7 @@
 //!   Implement `TS` for `OrderedFloat` from ordered_float
 //!
 //! - `heapless-impl`  
-//! 
+//!
 //!   Implement `TS` for `Vec` from heapless
 //!
 //!
@@ -286,11 +286,14 @@ pub trait TS {
     fn transparent() -> bool;
 
     fn export_recursive() -> Result<(), ExportError>
-    where Self: 'static {
+    where
+        Self: 'static,
+    {
         Self::export_recursive_but_exclude(&mut HashSet::new())
     }
-    fn export_recursive_but_exclude(exclude: &mut HashSet<TypeId>)
-     -> Result<(), ExportError> where Self: 'static;
+    fn export_recursive_but_exclude(exclude: &mut HashSet<TypeId>) -> Result<(), ExportError>
+    where
+        Self: 'static;
 
     /// Manually export this type to a file.
     /// The output file can be specified by annotating the type with `#[ts(export_to = ".."]`.
@@ -488,7 +491,9 @@ impl<T: TS> TS for Option<T> {
         true
     }
 
-    fn export_recursive_but_exclude(exclude: &mut HashSet<std::any::TypeId>) -> Result<(), ExportError>
+    fn export_recursive_but_exclude(
+        exclude: &mut HashSet<std::any::TypeId>,
+    ) -> Result<(), ExportError>
     where
         Self: 'static,
     {
@@ -532,8 +537,12 @@ impl<T: TS> TS for Vec<T> {
         true
     }
 
-    fn export_recursive_but_exclude(exclude: &mut HashSet<std::any::TypeId>) -> Result<(), ExportError>
-    where Self: 'static {
+    fn export_recursive_but_exclude(
+        exclude: &mut HashSet<std::any::TypeId>,
+    ) -> Result<(), ExportError>
+    where
+        Self: 'static,
+    {
         if !exclude.contains(&std::any::TypeId::of::<Self>()) {
             exclude.insert(std::any::TypeId::of::<Self>());
 
@@ -577,7 +586,9 @@ impl<K: TS, V: TS> TS for HashMap<K, V> {
     }
 
     fn export_recursive_but_exclude(exclude: &mut HashSet<TypeId>) -> Result<(), ExportError>
-    where Self: 'static {
+    where
+        Self: 'static,
+    {
         if !exclude.contains(&TypeId::of::<Self>()) {
             Self::export()?;
             exclude.insert(TypeId::of::<Self>());
@@ -616,7 +627,9 @@ impl<I: TS> TS for Range<I> {
     }
 
     fn export_recursive_but_exclude(exclude: &mut HashSet<TypeId>) -> Result<(), ExportError>
-    where Self: 'static {
+    where
+        Self: 'static,
+    {
         if !exclude.contains(&TypeId::of::<Self>()) {
             Self::export()?;
             exclude.insert(TypeId::of::<Self>());
@@ -654,7 +667,9 @@ impl<I: TS> TS for RangeInclusive<I> {
     }
 
     fn export_recursive_but_exclude(exclude: &mut HashSet<TypeId>) -> Result<(), ExportError>
-    where Self: 'static {
+    where
+        Self: 'static,
+    {
         if !exclude.contains(&TypeId::of::<Self>()) {
             Self::export()?;
             exclude.insert(TypeId::of::<Self>());
